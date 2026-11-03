@@ -1,0 +1,14 @@
+# Local machine configuration and generated Gradle/Android Studio files
+.gradle/
+.gradle-*/
+.android/
+.android-*/
+.kotlin/
+.idea/
+local.properties
+*.iml
+
+# Build outputs, including APKs and baseline profiles
+build/
+**/build/
+app/release/
