@@ -501,6 +501,12 @@ class MainActivity : ComponentActivity() {
                 setTextColor(textColor); textSize = 18f
                 setPadding(dp(20), dp(12), dp(20), dp(12))
                 background = selectionRowBackground(focusColor)
+                if (this is CheckedTextView && singleChoice) {
+                    checkMarkTintList = android.content.res.ColorStateList(
+                        arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                        intArrayOf(Color.rgb(255, 214, 79), Color.rgb(72, 82, 59))
+                    )
+                }
             }
     }
 
@@ -822,7 +828,12 @@ class MainActivity : ComponentActivity() {
     private fun focusHomeChannel(index: Int, attempts: Int = 0) {
         if (player != null || isFinishing) return
         val target = channelGrid.getChildAt(index)
-        if (target != null) target.requestFocus()
+        if (target != null) {
+            channelGrid.childrenAt().forEach { it.background = channelItemDrawable(false, 16) }
+            target.requestFocus()
+            target.background = channelItemDrawable(true, 16)
+            (channelGrid.parent as? ScrollView)?.post { (channelGrid.parent as? ScrollView)?.smoothScrollTo(0, target.top) }
+        }
         else if (attempts < 50) uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 20L)
     }
 
