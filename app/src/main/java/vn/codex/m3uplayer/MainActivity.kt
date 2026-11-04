@@ -183,10 +183,7 @@ class MainActivity : ComponentActivity() {
         uiHandler.post(clockTick)
         refreshWeather()
         renderChannels()
-        if (sources.isEmpty() && !prefs.getBoolean("first_url_prompt_shown", false)) {
-            startupPrompt.visibility = View.VISIBLE
-            prefs.edit().putBoolean("first_url_prompt_shown", true).apply()
-        }
+        if (sources.isEmpty()) startupPrompt.visibility = View.VISIBLE
         if (sources.isNotEmpty() && shouldRefreshPlaylist()) loadPlaylist()
         applyStartupActionIfReady()
     }
@@ -705,8 +702,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSettingsDialog() {
-        if (::startupPrompt.isInitialized) startupPrompt.visibility = View.GONE
-        val items = arrayOf("NHẬP / ĐỔI URL PLAYLIST", "KHI MỞ APP", "TỰ ĐỘNG CẬP NHẬT", "THÔNG TIN PHẦN MỀM")
+        val items = arrayOf("NHẬP URL", "CÀI ĐẶT TỰ PHÁT", "TỰ ĐỘNG CẬP NHẬT", "THÔNG TIN PHẦN MỀM")
         AlertDialog.Builder(this).setTitle("CÀI ĐẶT").setAdapter(themedChoiceAdapter(items)) { _, which ->
             when (which) {
                 0 -> showUrlDialog()
@@ -722,7 +718,7 @@ class MainActivity : ComponentActivity() {
     private fun showStartupBehaviorDialog() {
         val options = arrayOf("Tự phát kênh số…", "Tự trỏ đến kênh số…", "Không làm gì cả")
         val checked = when (prefs.getInt("startup_action", 0)) { 1 -> 0; 2 -> 1; else -> 2 }
-        AlertDialog.Builder(this).setTitle("KHI MỞ APP")
+        AlertDialog.Builder(this).setTitle("CÀI ĐẶT TỰ PHÁT")
             .setSingleChoiceItems(options, checked) { dialog, which ->
                 when (which) {
                     0 -> { dialog.dismiss(); showStartupChannelDialog(1) }
@@ -980,6 +976,7 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread { if (loadId == playlistLoadId) {
                         refreshButton.isEnabled = true; refreshButton.alpha = 1f
                         if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
+                        startupPrompt.visibility = View.GONE
                         channels = directChannels; saveCachedChannels(cachedJson, source.value); renderChannels()
                         applyStartupActionIfReady()
                         if (manual) toast("Đã cập nhật playlist.")
@@ -1028,6 +1025,7 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { if (loadId == playlistLoadId) {
                     refreshButton.isEnabled = true; refreshButton.alpha = 1f
                     if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
+                    startupPrompt.visibility = View.GONE
                     channels = parsed; saveCachedChannels(cachedJson, source.value); renderChannels()
                     applyStartupActionIfReady()
                     if (manual) toast("Đã cập nhật ${parsed.size} kênh.")
