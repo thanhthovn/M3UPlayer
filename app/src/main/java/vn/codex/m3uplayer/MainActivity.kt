@@ -118,7 +118,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var video: PlayerView
     private lateinit var listPanel: LinearLayout
     private lateinit var channelRows: LinearLayout
-    private lateinit var status: TextView
     private lateinit var playScreen: FrameLayout
     private lateinit var numericChannelOverlay: OutlinedNumberView
     private lateinit var homePanel: LinearLayout
@@ -267,13 +266,6 @@ class MainActivity : ComponentActivity() {
         val panelLp = FrameLayout.LayoutParams(panelWidth, -1, Gravity.END).apply { setMargins(0, dp(2), dp(12), dp(2)) }
         root.addView(listPanel, panelLp)
         listPanel.visibility = View.GONE
-        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        status = text("Đang tải danh sách…", 15, true).apply {
-            setTextColor(Color.rgb(255, 232, 150)); gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-        head.addView(status, LinearLayout.LayoutParams(-1, dp(34)))
-        listPanel.addView(head)
         val scroll = ScrollView(this).apply { isFillViewport = true }
         channelRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(channelRows)
@@ -877,7 +869,6 @@ class MainActivity : ComponentActivity() {
         }
         refreshButton.isEnabled = false
         refreshButton.alpha = .55f
-        status.text = "ĐANG TẢI PLAYLIST…"
         val source = sourceOverride ?: sources.first()
         val requestTask = playlistIo.submit {
             try {
@@ -946,7 +937,6 @@ class MainActivity : ComponentActivity() {
                         val message = if (sourceOverride != null) "Không tải được list <${source.name}>: $detail"
                             else if (channels.isEmpty()) "Không tải được playlist: $detail"
                             else "Cập nhật lỗi · vẫn giữ ${channels.size} kênh cũ: $detail"
-                        status.text = message
                         toast(message)
                     }
                 }
@@ -978,7 +968,6 @@ class MainActivity : ComponentActivity() {
         val generation = ++channelRenderGeneration
         updateRefreshButtonCount()
         channelRows.removeAllViews()
-        status.text = if (channels.isEmpty()) "CHƯA CÓ KÊNH" else "${channels.size} KÊNH"
         channelGrid.removeAllViews()
         val widthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
         val columns = when { widthDp >= 1500 -> 6; widthDp >= 800 -> 5; widthDp >= 500 -> 3; else -> 2 }
