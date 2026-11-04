@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
     private var startupModeAtLaunch = 0
     private var startupChannelAtLaunch = 1
     private var startupActionPending = false
+    private var startupHighlightedChannel: Int? = null
     @Volatile private var playlistLoadId = 0
     private var listVisible = false
     private var playbackMimeAttempts = listOf<String?>(null)
@@ -787,7 +788,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 dialog.show()
-                resizeDialog(dialog, 0.4f)
+                resizeDialog(dialog, 0.44f)
             }
     }
 
@@ -847,7 +848,9 @@ class MainActivity : ComponentActivity() {
             target.post {
                 val scrollView = channelGrid.parent as? ScrollView
                 scrollView?.scrollTo(0, target.top)
+                startupHighlightedChannel = index
                 target.requestFocus()
+                if (target.isFocused) target.background = startupChannelFocusDrawable()
                 if (!target.isFocused && attempts < 50) {
                     uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 40L)
                 }
@@ -1180,7 +1183,9 @@ class MainActivity : ComponentActivity() {
                 contentDescription = "Phát kênh ${channel.name}"
                 setOnClickListener { playChannel(index) }
                 setOnFocusChangeListener { view, focused ->
-                    view.background = channelItemDrawable(focused, 16)
+                    if (!focused && startupHighlightedChannel == index) startupHighlightedChannel = null
+                    view.background = if (focused && startupHighlightedChannel == index) startupChannelFocusDrawable()
+                        else channelItemDrawable(focused, 16)
                 }
             }
             val gridLogo = ImageView(this).apply {
@@ -1277,6 +1282,7 @@ class MainActivity : ComponentActivity() {
 
     private fun playChannel(index: Int, hideList: Boolean) {
         if (index !in channels.indices) return
+        startupHighlightedChannel = null
         currentChannel = index
         if (player == null) {
             val httpFactory = OkHttpDataSource.Factory(playbackHttpClient)
@@ -1517,6 +1523,11 @@ class MainActivity : ComponentActivity() {
         setColor(if (focused) Color.rgb(97, 52, 16) else Color.TRANSPARENT)
         cornerRadius = dp(radiusDp).toFloat()
         setStroke(dp(if (focused) 3 else 1), if (focused) Color.rgb(239, 155, 68) else Color.rgb(54, 80, 38))
+    }
+    private fun startupChannelFocusDrawable() = GradientDrawable().apply {
+        setColor(Color.rgb(112, 92, 25))
+        cornerRadius = dp(16).toFloat()
+        setStroke(dp(4), Color.rgb(255, 214, 79))
     }
     private fun isDirectMediaUrl(value: String): Boolean {
         val lower = value.lowercase(Locale.ROOT)
