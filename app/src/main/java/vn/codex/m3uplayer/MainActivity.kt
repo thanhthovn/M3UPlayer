@@ -850,7 +850,21 @@ class MainActivity : ComponentActivity() {
                 scrollView?.scrollTo(0, target.top)
                 startupHighlightedChannel = index
                 target.requestFocus()
-                if (target.isFocused) target.background = startupChannelFocusDrawable()
+                // Re-apply after the focus/layout pass: on TV launch the channel grid can
+                // receive focus before its final layout, leaving the card visually stale
+                // until the next D-pad event.
+                target.postOnAnimation {
+                    if (target.isFocused && startupHighlightedChannel == index) {
+                        target.background = startupChannelFocusDrawable()
+                        target.invalidate()
+                    }
+                }
+                target.postDelayed({
+                    if (target.isFocused && startupHighlightedChannel == index) {
+                        target.background = startupChannelFocusDrawable()
+                        target.invalidate()
+                    }
+                }, 100L)
                 if (!target.isFocused && attempts < 50) {
                     uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 40L)
                 }
