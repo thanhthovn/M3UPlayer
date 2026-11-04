@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
         renderChannels()
         if (sources.isEmpty()) startupPrompt.visibility = View.VISIBLE
         if (sources.isNotEmpty() && shouldRefreshPlaylist()) loadPlaylist()
-        applyStartupActionIfReady()
+        else applyStartupActionIfReady()
     }
 
     private fun buildUi() {
@@ -723,6 +723,7 @@ class MainActivity : ComponentActivity() {
             }
         }.setNegativeButton("ĐÓNG", null).create().also { dialog ->
             dialog.show(); applyDialogTheme(dialog)
+            resizeDialog(dialog, 0.6f)
         }
     }
 
@@ -745,7 +746,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .setNegativeButton("ĐÓNG", null).create().also { dialog ->
-                dialog.show(); applyDialogTheme(dialog, listTextColor = Color.WHITE)
+                dialog.show(); applyDialogTheme(dialog, listTextColor = Color.WHITE); resizeDialog(dialog, 0.6f)
             }
     }
 
@@ -811,6 +812,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun resizeDialog(dialog: AlertDialog, widthFactor: Float) {
+        val window = dialog.window ?: return
+        window.decorView.post {
+            if (!dialog.isShowing) return@post
+            val screenWidth = resources.displayMetrics.widthPixels
+            val currentWidth = window.decorView.width.takeIf { it > 0 } ?: screenWidth
+            val maximumWidth = (screenWidth - dp(24)).coerceAtLeast(dp(1))
+            val minimumWidth = dp(180).coerceAtMost(screenWidth)
+            val width = (currentWidth * widthFactor).toInt().coerceIn(minimumWidth, maximumWidth)
+            window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
+    }
+
     private fun applyStartupActionIfReady() {
         if (!startupActionPending || channels.isEmpty()) return
         startupActionPending = false
@@ -830,9 +844,11 @@ class MainActivity : ComponentActivity() {
         val target = channelGrid.getChildAt(index)
         if (target != null) {
             channelGrid.childrenAt().forEach { it.background = channelItemDrawable(false, 16) }
-            target.requestFocus()
-            target.background = channelItemDrawable(true, 16)
-            (channelGrid.parent as? ScrollView)?.post { (channelGrid.parent as? ScrollView)?.smoothScrollTo(0, target.top) }
+            target.post {
+                target.requestFocus()
+                target.background = channelItemDrawable(true, 16)
+                (channelGrid.parent as? ScrollView)?.smoothScrollTo(0, target.top)
+            }
         }
         else if (attempts < 50) uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 20L)
     }
@@ -909,7 +925,9 @@ class MainActivity : ComponentActivity() {
             addView(content)
         }
         AlertDialog.Builder(this).setTitle("THÔNG TIN PHẦN MỀM").setView(scroll)
-            .setPositiveButton("ĐÓNG", null).create().also { dialog -> dialog.show(); applyDialogTheme(dialog) }
+            .setPositiveButton("ĐÓNG", null).create().also { dialog ->
+                dialog.show(); applyDialogTheme(dialog); resizeDialog(dialog, 1.3f)
+            }
     }
 
     private val refreshIntervals = intArrayOf(1, 3, 7, 30)
@@ -930,6 +948,7 @@ class MainActivity : ComponentActivity() {
         dialog.listView.choiceMode = ListView.CHOICE_MODE_SINGLE
         dialog.listView.setItemChecked(current, true)
         applyDialogTheme(dialog)
+        resizeDialog(dialog, 0.6f)
     }
 
     private fun shouldRefreshPlaylist(): Boolean {
@@ -1085,6 +1104,7 @@ class MainActivity : ComponentActivity() {
                             else if (channels.isEmpty()) "Không tải được playlist: $detail"
                             else "Cập nhật lỗi · vẫn giữ ${channels.size} kênh cũ: $detail"
                         toast(message)
+                        applyStartupActionIfReady()
                     }
                 }
             }
