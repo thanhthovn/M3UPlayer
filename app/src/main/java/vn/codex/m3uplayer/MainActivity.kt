@@ -74,7 +74,7 @@ private class OutlinedNumberView(context: android.content.Context) : View(contex
         super.onDraw(canvas)
         if (number.isEmpty()) return
         val x = width / 2f
-        val y = 112f * resources.displayMetrics.density - textPaint.fontMetrics.top
+        val y = 48f * resources.displayMetrics.density - textPaint.fontMetrics.top
         textPaint.style = Paint.Style.STROKE
         textPaint.strokeWidth = 4f * resources.displayMetrics.density
         textPaint.color = Color.rgb(231, 75, 42)
