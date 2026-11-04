@@ -748,6 +748,7 @@ class MainActivity : ComponentActivity() {
             textSize = 22f
             setSingleLine(true)
             setPadding(dp(12), dp(12), dp(12), dp(12))
+            gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(128, 153, 91))
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
@@ -756,12 +757,13 @@ class MainActivity : ComponentActivity() {
         }
         val title = if (action == 1) "TỰ PHÁT KÊNH SỐ" else "TỰ FOCUS ĐẾN KÊNH SỐ"
         val inputContainer = FrameLayout(this).apply {
-            addView(input, FrameLayout.LayoutParams(dp(160), -2, Gravity.CENTER))
+            addView(input, FrameLayout.LayoutParams(dp(80), -2, Gravity.CENTER))
         }
         AlertDialog.Builder(this).setTitle(title).setView(inputContainer)
             .setNegativeButton("HỦY", null).setPositiveButton("LƯU", null).create().also { dialog ->
                 dialog.setOnShowListener {
                     applyDialogTheme(dialog)
+                    centerStartupNumberDialog(dialog)
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val number = input.text.toString().toIntOrNull()
                         if (number == null || number < 1) {
@@ -779,6 +781,28 @@ class MainActivity : ComponentActivity() {
                 }
                 dialog.show()
             }
+    }
+
+    private fun centerStartupNumberDialog(dialog: AlertDialog) {
+        val titleId = resources.getIdentifier("alertTitle", "id", "android")
+        dialog.findViewById<TextView>(titleId)?.apply {
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+        }
+        val panelId = resources.getIdentifier("buttonPanel", "id", "android")
+        (dialog.findViewById<View>(panelId) as? LinearLayout)?.apply {
+            gravity = Gravity.CENTER
+            listOf("leftSpacer", "rightSpacer", "spacer").forEach { name ->
+                val spacerId = resources.getIdentifier(name, "id", "android")
+                findViewById<View>(spacerId)?.visibility = View.GONE
+            }
+            listOf(AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE).forEach { which ->
+                (dialog.getButton(which).layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+                    params.weight = 0f
+                    dialog.getButton(which).layoutParams = params
+                }
+            }
+        }
     }
 
     private fun applyStartupActionIfReady() {
