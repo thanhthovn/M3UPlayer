@@ -15,6 +15,7 @@ import android.graphics.drawable.StateListDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
@@ -62,7 +63,9 @@ import okhttp3.OkHttpClient
 
 private class OutlinedNumberView(context: android.content.Context) : View(context) {
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 144f * resources.displayMetrics.scaledDensity
+        textSize = android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_SP, 144f, resources.displayMetrics
+        )
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
         strokeJoin = Paint.Join.ROUND
@@ -132,7 +135,6 @@ class MainActivity : ComponentActivity() {
     private var startupModeAtLaunch = 0
     private var startupChannelAtLaunch = 1
     private var startupActionPending = false
-    private var startupHighlightedChannel: Int? = null
     @Volatile private var playlistLoadId = 0
     private var listVisible = false
     private var playbackMimeAttempts = listOf<String?>(null)
@@ -378,7 +380,7 @@ class MainActivity : ComponentActivity() {
             place.name.startsWith("Đặc Khu ", true) -> "Đặc khu"
             else -> "Phường"
         }
-        return "$placeType ${shortPlace(place.name)}\n$provinceLabel"
+        return "📍 $placeType ${shortPlace(place.name)}\n$provinceLabel"
     }
 
     private fun weatherLabel() = text("Đang cập nhật thời tiết…", 19, true).apply {
@@ -848,23 +850,7 @@ class MainActivity : ComponentActivity() {
             target.post {
                 val scrollView = channelGrid.parent as? ScrollView
                 scrollView?.scrollTo(0, target.top)
-                startupHighlightedChannel = index
                 target.requestFocus()
-                // Re-apply after the focus/layout pass: on TV launch the channel grid can
-                // receive focus before its final layout, leaving the card visually stale
-                // until the next D-pad event.
-                target.postOnAnimation {
-                    if (target.isFocused && startupHighlightedChannel == index) {
-                        target.background = startupChannelFocusDrawable()
-                        target.invalidate()
-                    }
-                }
-                target.postDelayed({
-                    if (target.isFocused && startupHighlightedChannel == index) {
-                        target.background = startupChannelFocusDrawable()
-                        target.invalidate()
-                    }
-                }, 100L)
                 if (!target.isFocused && attempts < 50) {
                     uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 40L)
                 }
@@ -936,8 +922,15 @@ class MainActivity : ComponentActivity() {
                 setPadding(dp(8), dp(4), dp(8), dp(16)); setLineSpacing(dp(3).toFloat(), 1f)
             }, LinearLayout.LayoutParams(-1, -2))
             addView(View(this@MainActivity).apply { setBackgroundColor(Color.rgb(66, 88, 51)) }, LinearLayout.LayoutParams(-1, dp(1)))
-            addView(text(licenseContent, 15, false).apply {
-                setTextColor(Color.WHITE); setPadding(dp(8), dp(14), dp(8), dp(4))
+            addView(text(licenseContent, 14, false).apply {
+                setTextColor(Color.WHITE)
+                gravity = Gravity.START
+                textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+                setPadding(dp(8), dp(14), dp(8), dp(4))
+                setLineSpacing(dp(3).toFloat(), 1f)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    justificationMode = android.text.Layout.JUSTIFICATION_MODE_INTER_WORD
+                }
             }, LinearLayout.LayoutParams(-1, -2))
         }
         val scroll = ScrollView(this).apply {
@@ -1197,9 +1190,7 @@ class MainActivity : ComponentActivity() {
                 contentDescription = "Phát kênh ${channel.name}"
                 setOnClickListener { playChannel(index) }
                 setOnFocusChangeListener { view, focused ->
-                    if (!focused && startupHighlightedChannel == index) startupHighlightedChannel = null
-                    view.background = if (focused && startupHighlightedChannel == index) startupChannelFocusDrawable()
-                        else channelItemDrawable(focused, 16)
+                    view.background = channelItemDrawable(focused, 16)
                 }
             }
             val gridLogo = ImageView(this).apply {
@@ -1296,7 +1287,6 @@ class MainActivity : ComponentActivity() {
 
     private fun playChannel(index: Int, hideList: Boolean) {
         if (index !in channels.indices) return
-        startupHighlightedChannel = null
         currentChannel = index
         if (player == null) {
             val httpFactory = OkHttpDataSource.Factory(playbackHttpClient)
@@ -1537,11 +1527,6 @@ class MainActivity : ComponentActivity() {
         setColor(if (focused) Color.rgb(97, 52, 16) else Color.TRANSPARENT)
         cornerRadius = dp(radiusDp).toFloat()
         setStroke(dp(if (focused) 3 else 1), if (focused) Color.rgb(239, 155, 68) else Color.rgb(54, 80, 38))
-    }
-    private fun startupChannelFocusDrawable() = GradientDrawable().apply {
-        setColor(Color.rgb(112, 92, 25))
-        cornerRadius = dp(16).toFloat()
-        setStroke(dp(4), Color.rgb(255, 214, 79))
     }
     private fun isDirectMediaUrl(value: String): Boolean {
         val lower = value.lowercase(Locale.ROOT)
