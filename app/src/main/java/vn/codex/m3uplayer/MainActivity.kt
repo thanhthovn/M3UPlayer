@@ -149,7 +149,11 @@ class MainActivity : ComponentActivity() {
     }
     private val uiHandler = Handler(Looper.getMainLooper())
     private val clockTick = object : Runnable {
-        override fun run() { updateClock(); uiHandler.postDelayed(this, 30_000L) }
+        override fun run() {
+            updateClock()
+            val untilNextMinute = 60_000L - System.currentTimeMillis() % 60_000L
+            uiHandler.postDelayed(this, untilNextMinute)
+        }
     }
     private val pendingChannelNumber = StringBuilder()
     private val numericTuneTimeout = Runnable { tunePendingChannelNumber() }
@@ -236,9 +240,9 @@ class MainActivity : ComponentActivity() {
             background = GradientDrawable().apply {
                 setColor(Color.rgb(69, 88, 48)); cornerRadius = dp(12).toFloat(); setStroke(dp(2), Color.rgb(236, 91, 50))
             }
-            textSize = if (wideHeader) 43.2f else 34.56f
+            textSize = if (wideHeader) 47.5f else 38f
         }
-        header.addView(timeInfo, LinearLayout.LayoutParams(if (wideHeader) dp(152) else dp(120), if (wideHeader) dp(90) else dp(76)).apply { leftMargin = if (wideHeader) dp(12) else dp(6) })
+        header.addView(timeInfo, LinearLayout.LayoutParams(if (wideHeader) dp(152) else dp(120), if (wideHeader) dp(72) else dp(61)).apply { leftMargin = if (wideHeader) dp(12) else dp(6) })
         if (wideHeader) {
             weatherInfo = weatherLabel().apply { textSize = 16f; maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(16), dp(10), dp(16), dp(10)) }
             header.addView(weatherInfo, LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, dp(88)).apply { leftMargin = dp(12) })
