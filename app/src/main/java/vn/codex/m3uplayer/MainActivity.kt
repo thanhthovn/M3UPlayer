@@ -900,7 +900,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSoftwareLicenseDialog() {
-        val licenseText = try { assets.open("licenses/GPL-3.0.txt").bufferedReader().use { it.readText() } }
+        val licenseText = try {
+            val rawLicense = assets.open("licenses/GPL-3.0.txt").bufferedReader().use { it.readText() }
+                .replace("\r\n", "\n").replace('\r', '\n').trim()
+            rawLicense.split(Regex("\\n\\s*\\n"))
+                .joinToString("\n\n") { paragraph ->
+                    paragraph.lineSequence().joinToString(" ") { it.trim() }.replace(Regex("\\s+"), " ")
+                }
+        }
         catch (_: Exception) { "Không đọc được tệp GPL-3.0 đi kèm ứng dụng." }
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0" } catch (_: Exception) { "1.0" }
         val appInfo = "THÔNG TIN ỨNG DỤNG\n" +
