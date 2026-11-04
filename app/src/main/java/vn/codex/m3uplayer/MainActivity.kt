@@ -62,7 +62,7 @@ import okhttp3.OkHttpClient
 
 private class OutlinedNumberView(context: android.content.Context) : View(context) {
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 72f * resources.displayMetrics.scaledDensity
+        textSize = 144f * resources.displayMetrics.scaledDensity
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
         strokeJoin = Paint.Join.ROUND
@@ -74,13 +74,13 @@ private class OutlinedNumberView(context: android.content.Context) : View(contex
         super.onDraw(canvas)
         if (number.isEmpty()) return
         val x = width / 2f
-        val y = height / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
+        val y = 112f * resources.displayMetrics.density - textPaint.fontMetrics.top
         textPaint.style = Paint.Style.STROKE
-        textPaint.strokeWidth = 3f * resources.displayMetrics.density
-        textPaint.color = Color.rgb(255, 211, 87)
+        textPaint.strokeWidth = 4f * resources.displayMetrics.density
+        textPaint.color = Color.rgb(231, 75, 42)
         canvas.drawText(number, x, y, textPaint)
         textPaint.style = Paint.Style.FILL
-        textPaint.color = Color.rgb(48, 83, 39)
+        textPaint.color = Color.rgb(255, 224, 112)
         canvas.drawText(number, x, y, textPaint)
     }
 }
@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             contentDescription = "Số kênh đang nhập"
         }
-        playScreen.addView(numericChannelOverlay, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        playScreen.addView(numericChannelOverlay, FrameLayout.LayoutParams(-1, -1, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         root.addView(playScreen)
 
         homePanel = LinearLayout(this).apply {
@@ -216,6 +216,7 @@ class MainActivity : ComponentActivity() {
             background = actionButtonDrawable(false)
             setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
             gravity = Gravity.CENTER
+            textSize = 9f
             includeFontPadding = false
             maxLines = 2
             setPadding(dp(2), 0, dp(2), 0)
@@ -839,25 +840,20 @@ class MainActivity : ComponentActivity() {
             .setNegativeButton("HỦY", null).setPositiveButton("LƯU & TẢI", null).create().also { d ->
                 d.setOnShowListener { applyDialogTheme(d); d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                     val value = input.text.toString().trim()
+                    if (value.isBlank() || value == "https://" || value == "http://") {
+                        input.error = "Vui lòng nhập đầy đủ URL!"
+                        return@setOnClickListener
+                    }
                     if (!(value.startsWith("http://") || value.startsWith("https://"))) { input.error = "Nhập link http hoặc https"; return@setOnClickListener }
                     val name = value.substringAfterLast('/').substringBefore('?').ifBlank { "Playlist" }
-                    val previousUrl = sources.firstOrNull()?.value
-                    sources.clear()
-                    sources.add(PlaylistSource(name, value))
-                    saveSources()
-                    if (previousUrl != value) {
-                        prefs.edit().remove("playlist_cache").remove("playlist_cache_source").remove("playlist_last_update").apply()
-                        channels = emptyList()
-                        renderChannels()
-                    }
                     d.dismiss()
-                    loadPlaylist()
+                    loadPlaylist(sourceOverride = PlaylistSource(name, value))
                 } }
                 d.show()
             }
     }
 
-    private fun loadPlaylist(manual: Boolean = false) {
+    private fun loadPlaylist(manual: Boolean = false, sourceOverride: PlaylistSource? = null) {
         val loadId = ++playlistLoadId
         synchronized(playlistRequestLock) {
             activePlaylistConnection?.disconnect()
@@ -870,7 +866,7 @@ class MainActivity : ComponentActivity() {
             homePanel.visibility = View.VISIBLE
             listPanel.visibility = View.GONE
         } else showList(true)
-        if (sources.isEmpty()) {
+        if (sources.isEmpty() && sourceOverride == null) {
             channels = emptyList()
             renderChannels()
             return
@@ -878,7 +874,7 @@ class MainActivity : ComponentActivity() {
         refreshButton.isEnabled = false
         refreshButton.alpha = .55f
         status.text = "ĐANG TẢI PLAYLIST…"
-        val source = sources.first()
+        val source = sourceOverride ?: sources.first()
         val requestTask = playlistIo.submit {
             try {
                 if (isDirectMediaUrl(source.value) && !source.value.contains(".m3u8", true)) {
@@ -887,6 +883,7 @@ class MainActivity : ComponentActivity() {
                     val cachedJson = serializeChannels(directChannels)
                     runOnUiThread { if (loadId == playlistLoadId) {
                         refreshButton.isEnabled = true; refreshButton.alpha = 1f
+                        if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
                         channels = directChannels; saveCachedChannels(cachedJson, source.value); renderChannels()
                         if (manual) toast("Đã cập nhật playlist.")
                     } }
@@ -933,6 +930,7 @@ class MainActivity : ComponentActivity() {
                 val cachedJson = serializeChannels(parsed)
                 runOnUiThread { if (loadId == playlistLoadId) {
                     refreshButton.isEnabled = true; refreshButton.alpha = 1f
+                    if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
                     channels = parsed; saveCachedChannels(cachedJson, source.value); renderChannels()
                     if (manual) toast("Đã cập nhật ${parsed.size} kênh.")
                 } }
@@ -941,7 +939,8 @@ class MainActivity : ComponentActivity() {
                     if (loadId == playlistLoadId) {
                         refreshButton.isEnabled = true; refreshButton.alpha = 1f
                         val detail = e.message?.take(100) ?: "kiểm tra kết nối và URL"
-                        val message = if (channels.isEmpty()) "Không tải được playlist: $detail"
+                        val message = if (sourceOverride != null) "Không tải được list <${source.name}>: $detail"
+                            else if (channels.isEmpty()) "Không tải được playlist: $detail"
                             else "Cập nhật lỗi · vẫn giữ ${channels.size} kênh cũ: $detail"
                         status.text = message
                         toast(message)
@@ -987,7 +986,7 @@ class MainActivity : ComponentActivity() {
         if (!::refreshButton.isInitialized) return
         val countText = "${channels.size} KÊNH\n"
         val label = android.text.SpannableString(countText + "⟳")
-        label.setSpan(android.text.style.AbsoluteSizeSpan(9, true), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        label.setSpan(android.text.style.RelativeSizeSpan(1.5f), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.ForegroundColorSpan(Color.rgb(255, 238, 185)), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.AbsoluteSizeSpan(31, true), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         refreshButton.text = label
@@ -1269,12 +1268,11 @@ class MainActivity : ComponentActivity() {
         player?.apply { playWhenReady = false; stop(); clearMediaItems(); release() }
         player = null
         listVisible = false
-        currentChannel = -1
         listPanel.visibility = View.GONE
         homePanel.visibility = View.VISIBLE
         channelRows.childrenAt().forEach { it.background = channelItemDrawable(false, 12) }
         channelGrid.childrenAt().forEach { it.background = channelItemDrawable(false, 16) }
-        if (channelGrid.childCount > 0) channelGrid.getChildAt(0).requestFocus()
+        if (channelGrid.childCount > 0) channelGrid.getChildAt(currentChannel.coerceIn(0, channelGrid.childCount - 1)).requestFocus()
         else (homePanel.getChildAt(0) as? LinearLayout)?.getChildAt(0)?.requestFocus()
     }
 
@@ -1324,6 +1322,11 @@ class MainActivity : ComponentActivity() {
         playlistIo.shutdownNow()
         logoIo.shutdownNow()
         super.onDestroy()
+    }
+
+    override fun onStop() {
+        if (player != null) returnToHome()
+        super.onStop()
     }
 
     private fun text(value: String, size: Int, bold: Boolean) = TextView(this).apply { text = value; textSize = size.toFloat(); if (bold) typeface = Typeface.DEFAULT_BOLD }
