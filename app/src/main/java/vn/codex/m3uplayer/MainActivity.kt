@@ -787,6 +787,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 dialog.show()
+                resizeDialog(dialog, 0.4f)
             }
     }
 
@@ -819,7 +820,7 @@ class MainActivity : ComponentActivity() {
             val screenWidth = resources.displayMetrics.widthPixels
             val currentWidth = window.decorView.width.takeIf { it > 0 } ?: screenWidth
             val maximumWidth = (screenWidth - dp(24)).coerceAtLeast(dp(1))
-            val minimumWidth = dp(180).coerceAtMost(screenWidth)
+            val minimumWidth = dp(if (widthFactor <= 0.4f) 120 else 180).coerceAtMost(screenWidth)
             val width = (currentWidth * widthFactor).toInt().coerceIn(minimumWidth, maximumWidth)
             window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT)
         }
@@ -843,11 +844,13 @@ class MainActivity : ComponentActivity() {
         if (player != null || isFinishing) return
         val target = channelGrid.getChildAt(index)
         if (target != null) {
-            channelGrid.childrenAt().forEach { it.background = channelItemDrawable(false, 16) }
             target.post {
+                val scrollView = channelGrid.parent as? ScrollView
+                scrollView?.scrollTo(0, target.top)
                 target.requestFocus()
-                target.background = channelItemDrawable(true, 16)
-                (channelGrid.parent as? ScrollView)?.smoothScrollTo(0, target.top)
+                if (!target.isFocused && attempts < 50) {
+                    uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 40L)
+                }
             }
         }
         else if (attempts < 50) uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 20L)
