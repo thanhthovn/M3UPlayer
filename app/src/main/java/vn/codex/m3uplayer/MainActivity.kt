@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
         val spacer = Space(this)
         if (wideHeader) header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
         clockInfo = text("", 17, true).apply {
-            setTextColor(Color.WHITE); gravity = Gravity.END or Gravity.CENTER_VERTICAL; textAlignment = View.TEXT_ALIGNMENT_VIEW_END
+            setTextColor(Color.WHITE); gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER
             maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END; textSize = if (wideHeader) 17f else 12f
         }
         header.addView(clockInfo, if (wideHeader) LinearLayout.LayoutParams(dp(300), -2) else LinearLayout.LayoutParams(0, -2, 1f))
