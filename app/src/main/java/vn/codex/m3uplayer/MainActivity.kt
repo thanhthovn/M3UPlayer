@@ -74,7 +74,7 @@ private class OutlinedNumberView(context: android.content.Context) : View(contex
         super.onDraw(canvas)
         if (number.isEmpty()) return
         val x = width / 2f
-        val y = 48f * resources.displayMetrics.density - textPaint.fontMetrics.top
+        val y = 24f * resources.displayMetrics.density - textPaint.fontMetrics.top
         textPaint.style = Paint.Style.STROKE
         textPaint.strokeWidth = 4f * resources.displayMetrics.density
         textPaint.color = Color.rgb(231, 75, 42)
@@ -218,7 +218,7 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             textSize = 9f
             includeFontPadding = false
-            maxLines = 2
+            maxLines = 3
             setPadding(dp(2), 0, dp(2), 0)
         }
         updateRefreshButtonCount()
@@ -984,11 +984,11 @@ class MainActivity : ComponentActivity() {
 
     private fun updateRefreshButtonCount() {
         if (!::refreshButton.isInitialized) return
-        val countText = "${channels.size} KÊNH\n"
+        val countText = "${channels.size}\nKÊNH\n"
         val label = android.text.SpannableString(countText + "⟳")
         label.setSpan(android.text.style.RelativeSizeSpan(1.5f), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.ForegroundColorSpan(Color.rgb(255, 238, 185)), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        label.setSpan(android.text.style.AbsoluteSizeSpan(31, true), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        label.setSpan(android.text.style.AbsoluteSizeSpan(26, true), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         refreshButton.text = label
         refreshButton.contentDescription = "Cập nhật playlist, ${channels.size} kênh"
     }
