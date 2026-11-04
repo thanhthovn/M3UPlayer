@@ -988,7 +988,16 @@ class MainActivity : ComponentActivity() {
         val label = android.text.SpannableString(countText + "⟳")
         label.setSpan(android.text.style.RelativeSizeSpan(1.5f), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.ForegroundColorSpan(Color.rgb(255, 238, 185)), 0, countText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val channelLabelStart = countText.indexOf("KÊNH")
+        label.setSpan(object : android.text.style.LineHeightSpan {
+            override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, v: Int, fm: Paint.FontMetricsInt) {
+                val tighten = dp(5)
+                fm.descent -= tighten
+                fm.bottom -= tighten
+            }
+        }, channelLabelStart, channelLabelStart + "KÊNH".length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.AbsoluteSizeSpan(26, true), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        label.setSpan(android.text.style.StyleSpan(Typeface.BOLD), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         refreshButton.text = label
         refreshButton.contentDescription = "Cập nhật playlist, ${channels.size} kênh"
     }
