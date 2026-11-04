@@ -265,7 +265,7 @@ class MainActivity : ComponentActivity() {
         gridScroll.addView(channelGrid)
         homePanel.addView(gridScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        startupPrompt = text("VUI LÒNG NHẤN OK ĐỂ NHẬP URL!", 26, true).apply {
+        startupPrompt = text("VUI LÒNG NHẤN OK ĐỂ NHẬP URL!", 26, false).apply {
             setTextColor(Color.rgb(255, 232, 150))
             gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -486,20 +486,25 @@ class MainActivity : ComponentActivity() {
         setStroke(dp(1), Color.rgb(66, 88, 51))
     }
 
-    private fun themedChoiceAdapter(items: Array<String>, singleChoice: Boolean = false) = object : ArrayAdapter<String>(
+    private fun themedChoiceAdapter(
+        items: Array<String>,
+        singleChoice: Boolean = false,
+        textColor: Int = Color.rgb(255, 232, 150),
+        focusColor: Int = Color.rgb(238, 145, 54)
+    ) = object : ArrayAdapter<String>(
         this,
         if (singleChoice) android.R.layout.simple_list_item_single_choice else android.R.layout.simple_list_item_1,
         items
     ) {
         override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
             (super.getView(position, convertView, parent) as TextView).apply {
-                setTextColor(Color.rgb(255, 232, 150)); textSize = 18f
+                setTextColor(textColor); textSize = 18f
                 setPadding(dp(20), dp(12), dp(20), dp(12))
-                background = selectionRowBackground()
+                background = selectionRowBackground(focusColor)
             }
     }
 
-    private fun selectionRowBackground() = object : Drawable() {
+    private fun selectionRowBackground(focusColor: Int = Color.rgb(238, 145, 54)) = object : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private var highlighted = false
         override fun draw(canvas: Canvas) {
@@ -508,7 +513,7 @@ class MainActivity : ComponentActivity() {
             paint.color = if (highlighted) Color.rgb(70, 88, 48) else Color.rgb(34, 45, 30)
             canvas.drawRoundRect(rect, dp(8).toFloat(), dp(8).toFloat(), paint)
             paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(if (highlighted) 2 else 1).toFloat()
-            paint.color = if (highlighted) Color.rgb(238, 145, 54) else Color.rgb(58, 76, 43)
+            paint.color = if (highlighted) focusColor else Color.rgb(58, 76, 43)
             canvas.drawRoundRect(rect, dp(8).toFloat(), dp(8).toFloat(), paint)
         }
         override fun onStateChange(state: IntArray): Boolean {
@@ -716,10 +721,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showStartupBehaviorDialog() {
-        val options = arrayOf("Tự phát kênh số…", "Tự trỏ đến kênh số…", "Không làm gì cả")
+        val options = arrayOf("Tự phát kênh số…", "Tự focus đến kênh số…", "Không làm gì cả")
         val checked = when (prefs.getInt("startup_action", 0)) { 1 -> 0; 2 -> 1; else -> 2 }
         AlertDialog.Builder(this).setTitle("CÀI ĐẶT TỰ PHÁT")
-            .setSingleChoiceItems(options, checked) { dialog, which ->
+            .setSingleChoiceItems(
+                themedChoiceAdapter(options, singleChoice = true, textColor = Color.WHITE, focusColor = Color.rgb(255, 214, 79)),
+                checked
+            ) { dialog, which ->
                 when (which) {
                     0 -> { dialog.dismiss(); showStartupChannelDialog(1) }
                     1 -> { dialog.dismiss(); showStartupChannelDialog(2) }
@@ -731,7 +739,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .setNegativeButton("ĐÓNG", null).create().also { dialog ->
-                dialog.show(); applyDialogTheme(dialog)
+                dialog.show(); applyDialogTheme(dialog, listTextColor = Color.WHITE)
             }
     }
 
@@ -746,8 +754,11 @@ class MainActivity : ComponentActivity() {
             setText(prefs.getInt("startup_channel", 1).toString())
             setSelection(text.length)
         }
-        val title = if (action == 1) "TỰ PHÁT KÊNH SỐ" else "TỰ TRỎ ĐẾN KÊNH SỐ"
-        AlertDialog.Builder(this).setTitle(title).setView(input)
+        val title = if (action == 1) "TỰ PHÁT KÊNH SỐ" else "TỰ FOCUS ĐẾN KÊNH SỐ"
+        val inputContainer = FrameLayout(this).apply {
+            addView(input, FrameLayout.LayoutParams(dp(160), -2, Gravity.CENTER))
+        }
+        AlertDialog.Builder(this).setTitle(title).setView(inputContainer)
             .setNegativeButton("HỦY", null).setPositiveButton("LƯU", null).create().also { dialog ->
                 dialog.setOnShowListener {
                     applyDialogTheme(dialog)
@@ -791,7 +802,7 @@ class MainActivity : ComponentActivity() {
         else if (attempts < 50) uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 20L)
     }
 
-    private fun applyDialogTheme(dialog: AlertDialog) {
+    private fun applyDialogTheme(dialog: AlertDialog, listTextColor: Int = Color.rgb(255, 232, 150)) {
         dialog.window?.setBackgroundDrawable(GradientDrawable().apply {
             setColor(Color.rgb(34, 45, 30)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(66, 88, 51))
         })
@@ -808,7 +819,7 @@ class MainActivity : ComponentActivity() {
         dialog.listView?.let { list ->
             list.setBackgroundColor(Color.rgb(34, 45, 30))
             for (i in 0 until list.childCount) {
-                list.getChildAt(i)?.findViewById<TextView>(android.R.id.text1)?.setTextColor(Color.rgb(255, 232, 150))
+                list.getChildAt(i)?.findViewById<TextView>(android.R.id.text1)?.setTextColor(listTextColor)
             }
         }
     }
