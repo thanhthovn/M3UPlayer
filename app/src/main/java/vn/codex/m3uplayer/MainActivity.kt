@@ -126,8 +126,12 @@ class MainActivity : ComponentActivity() {
     private lateinit var timeInfo: TextView
     private lateinit var weatherInfo: TextView
     private lateinit var refreshButton: Button
+    private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
+    private var startupModeAtLaunch = 0
+    private var startupChannelAtLaunch = 1
+    private var startupActionPending = false
     @Volatile private var playlistLoadId = 0
     private var listVisible = false
     private var playbackMimeAttempts = listOf<String?>(null)
@@ -165,6 +169,9 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         loadSources()
+        startupModeAtLaunch = prefs.getInt("startup_action", 0).coerceIn(0, 2)
+        startupChannelAtLaunch = prefs.getInt("startup_channel", 1)
+        startupActionPending = sources.isNotEmpty() && startupModeAtLaunch != 0
         loadCachedChannels()
         loadPlaces()
         buildUi()
@@ -176,7 +183,12 @@ class MainActivity : ComponentActivity() {
         uiHandler.post(clockTick)
         refreshWeather()
         renderChannels()
+        if (sources.isEmpty() && !prefs.getBoolean("first_url_prompt_shown", false)) {
+            startupPrompt.visibility = View.VISIBLE
+            prefs.edit().putBoolean("first_url_prompt_shown", true).apply()
+        }
         if (sources.isNotEmpty() && shouldRefreshPlaylist()) loadPlaylist()
+        applyStartupActionIfReady()
     }
 
     private fun buildUi() {
@@ -255,6 +267,17 @@ class MainActivity : ComponentActivity() {
         channelGrid = GridLayout(this).apply { useDefaultMargins = false; alignmentMode = GridLayout.ALIGN_MARGINS }
         gridScroll.addView(channelGrid)
         homePanel.addView(gridScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        startupPrompt = text("VUI LÒNG NHẤN OK ĐỂ NHẬP URL!", 26, true).apply {
+            setTextColor(Color.rgb(255, 232, 150))
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            setPadding(dp(32), dp(12), dp(32), dp(12))
+            visibility = View.GONE
+            isFocusable = false
+            isClickable = false
+        }
+        root.addView(startupPrompt, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
 
         listPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -682,16 +705,94 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showSettingsDialog() {
-        val items = arrayOf("NHẬP / ĐỔI URL PLAYLIST", "TỰ ĐỘNG CẬP NHẬT", "THÔNG TIN PHẦN MỀM")
+        if (::startupPrompt.isInitialized) startupPrompt.visibility = View.GONE
+        val items = arrayOf("NHẬP / ĐỔI URL PLAYLIST", "KHI MỞ APP", "TỰ ĐỘNG CẬP NHẬT", "THÔNG TIN PHẦN MỀM")
         AlertDialog.Builder(this).setTitle("CÀI ĐẶT").setAdapter(themedChoiceAdapter(items)) { _, which ->
             when (which) {
                 0 -> showUrlDialog()
-                1 -> showRefreshIntervalDialog()
-                2 -> showSoftwareLicenseDialog()
+                1 -> showStartupBehaviorDialog()
+                2 -> showRefreshIntervalDialog()
+                3 -> showSoftwareLicenseDialog()
             }
         }.setNegativeButton("ĐÓNG", null).create().also { dialog ->
             dialog.show(); applyDialogTheme(dialog)
         }
+    }
+
+    private fun showStartupBehaviorDialog() {
+        val options = arrayOf("Tự phát kênh số…", "Tự trỏ đến kênh số…", "Không làm gì cả")
+        val checked = when (prefs.getInt("startup_action", 0)) { 1 -> 0; 2 -> 1; else -> 2 }
+        AlertDialog.Builder(this).setTitle("KHI MỞ APP")
+            .setSingleChoiceItems(options, checked) { dialog, which ->
+                when (which) {
+                    0 -> { dialog.dismiss(); showStartupChannelDialog(1) }
+                    1 -> { dialog.dismiss(); showStartupChannelDialog(2) }
+                    else -> {
+                        prefs.edit().putInt("startup_action", 0).apply()
+                        dialog.dismiss()
+                        toast("Đã chọn: Không làm gì cả.")
+                    }
+                }
+            }
+            .setNegativeButton("ĐÓNG", null).create().also { dialog ->
+                dialog.show(); applyDialogTheme(dialog)
+            }
+    }
+
+    private fun showStartupChannelDialog(action: Int) {
+        val input = EditText(this).apply {
+            textSize = 22f
+            setSingleLine(true)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setTextColor(Color.WHITE)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(128, 153, 91))
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(prefs.getInt("startup_channel", 1).toString())
+            setSelection(text.length)
+        }
+        val title = if (action == 1) "TỰ PHÁT KÊNH SỐ" else "TỰ TRỎ ĐẾN KÊNH SỐ"
+        AlertDialog.Builder(this).setTitle(title).setView(input)
+            .setNegativeButton("HỦY", null).setPositiveButton("LƯU", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    applyDialogTheme(dialog)
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val number = input.text.toString().toIntOrNull()
+                        if (number == null || number < 1) {
+                            input.error = "Nhập số kênh từ 1 trở lên"
+                            return@setOnClickListener
+                        }
+                        if (channels.isNotEmpty() && number > channels.size) {
+                            input.error = "Playlist hiện có ${channels.size} kênh"
+                            return@setOnClickListener
+                        }
+                        prefs.edit().putInt("startup_action", action).putInt("startup_channel", number).apply()
+                        dialog.dismiss()
+                        toast("Đã lưu cài đặt mở app.")
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun applyStartupActionIfReady() {
+        if (!startupActionPending || channels.isEmpty()) return
+        startupActionPending = false
+        val index = startupChannelAtLaunch - 1
+        if (index !in channels.indices) {
+            toast("Playlist hiện có ${channels.size} kênh, không có kênh số $startupChannelAtLaunch.")
+            return
+        }
+        when (startupModeAtLaunch) {
+            1 -> playChannel(index)
+            2 -> focusHomeChannel(index)
+        }
+    }
+
+    private fun focusHomeChannel(index: Int, attempts: Int = 0) {
+        if (player != null || isFinishing) return
+        val target = channelGrid.getChildAt(index)
+        if (target != null) target.requestFocus()
+        else if (attempts < 50) uiHandler.postDelayed({ focusHomeChannel(index, attempts + 1) }, 20L)
     }
 
     private fun applyDialogTheme(dialog: AlertDialog) {
@@ -880,6 +981,7 @@ class MainActivity : ComponentActivity() {
                         refreshButton.isEnabled = true; refreshButton.alpha = 1f
                         if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
                         channels = directChannels; saveCachedChannels(cachedJson, source.value); renderChannels()
+                        applyStartupActionIfReady()
                         if (manual) toast("Đã cập nhật playlist.")
                     } }
                     return@submit
@@ -927,6 +1029,7 @@ class MainActivity : ComponentActivity() {
                     refreshButton.isEnabled = true; refreshButton.alpha = 1f
                     if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
                     channels = parsed; saveCachedChannels(cachedJson, source.value); renderChannels()
+                    applyStartupActionIfReady()
                     if (manual) toast("Đã cập nhật ${parsed.size} kênh.")
                 } }
             } catch (e: Exception) {
