@@ -33,6 +33,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.common.C
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var channelRows: LinearLayout
     private lateinit var playScreen: FrameLayout
     private lateinit var numericChannelOverlay: OutlinedNumberView
+    private lateinit var qualityInfo: TextView
     private lateinit var homePanel: LinearLayout
     private lateinit var channelGrid: GridLayout
     private lateinit var clockInfo: TextView
@@ -201,6 +205,21 @@ class MainActivity : ComponentActivity() {
             setOnClickListener { toggleList() }
         }
         playScreen.addView(video, FrameLayout.LayoutParams(-1, -1))
+        qualityInfo = text("", 16, true).apply {
+            setTextColor(Color.WHITE)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(190, 34, 45, 30))
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), Color.rgb(88, 112, 62))
+            }
+            visibility = View.GONE
+            contentDescription = "Chất lượng video"
+        }
+        playScreen.addView(qualityInfo, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
+            leftMargin = dp(24)
+            bottomMargin = dp(24)
+        })
         numericChannelOverlay = OutlinedNumberView(this).apply {
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -1307,6 +1326,16 @@ class MainActivity : ComponentActivity() {
             val mediaSourceFactory = DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory)
             player = ExoPlayer.Builder(this).setMediaSourceFactory(mediaSourceFactory).build().also { exo ->
                 exo.addListener(object : Player.Listener {
+                    override fun onTracksChanged(tracks: Tracks) {
+                        updatePlaybackQuality(tracks)
+                    }
+
+                    override fun onVideoSizeChanged(videoSize: VideoSize) {
+                        if (videoSize.width > 0 && videoSize.height > 0) {
+                            showPlaybackQuality(videoSize.width, videoSize.height)
+                        }
+                    }
+
                     override fun onPlayerError(error: PlaybackException) {
                         val parseError = error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ||
                             error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ||
@@ -1345,6 +1374,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         val address = channels[index].url
+        qualityInfo.text = "Chất lượng: Đang tải"
+        qualityInfo.visibility = View.VISIBLE
         if (address.startsWith("udp://", true) || address.startsWith("webrtc://", true)) {
             toast(if (address.startsWith("udp://", true)) "Chưa hỗ trợ UDP trực tiếp. Hãy dùng HLS, DASH hoặc RTSP." else "WebRTC cần thông tin signaling riêng, không thể phát chỉ bằng URL trong M3U.")
             return
@@ -1403,6 +1434,29 @@ class MainActivity : ComponentActivity() {
         }
         if (show && channels.isEmpty()) showSettingsDialog()
     }
+
+    private fun updatePlaybackQuality(tracks: Tracks) {
+        val selectedVideoFormats = tracks.groups
+            .asSequence()
+            .filter { it.type == C.TRACK_TYPE_VIDEO }
+            .flatMap { group ->
+                (0 until group.length).asSequence()
+                    .filter { group.isTrackSelected(it) }
+                    .map { group.getTrackFormat(it) }
+            }
+            .filter { it.width > 0 && it.height > 0 }
+            .toList()
+        val format = selectedVideoFormats.maxByOrNull { it.width.toLong() * it.height }
+        if (format != null) showPlaybackQuality(format.width, format.height)
+    }
+
+    private fun showPlaybackQuality(width: Int, height: Int) {
+        if (!::qualityInfo.isInitialized || player == null) return
+        val shortSide = minOf(width, height)
+        qualityInfo.text = "Chất lượng: ${shortSide}p"
+        qualityInfo.visibility = View.VISIBLE
+    }
+
     private fun toggleList() = showList(!listVisible)
 
     private fun changeChannel(delta: Int) {
@@ -1453,6 +1507,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun returnToHome() {
+        if (::qualityInfo.isInitialized) qualityInfo.visibility = View.GONE
         video.player = null
         player?.apply { playWhenReady = false; stop(); clearMediaItems(); release() }
         player = null
