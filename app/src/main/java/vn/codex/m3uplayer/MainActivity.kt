@@ -36,6 +36,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.C
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -136,7 +137,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
+    private var selectedVideoResolution: Int? = null
     private var selectedVideoBitrateKbps: Int? = null
+    private var estimatedBandwidthKbps: Int? = null
     private var startupModeAtLaunch = 0
     private var startupChannelAtLaunch = 1
     private var startupActionPending = false
@@ -1336,7 +1339,8 @@ class MainActivity : ComponentActivity() {
 
                     override fun onVideoSizeChanged(videoSize: VideoSize) {
                         if (videoSize.width > 0 && videoSize.height > 0) {
-                            showPlaybackQuality(videoSize.width, videoSize.height)
+                            selectedVideoResolution = minOf(videoSize.width, videoSize.height)
+                            renderPlaybackQuality()
                         }
                     }
 
@@ -1374,11 +1378,26 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread { toast(message) }
                     }
                 })
+                exo.addAnalyticsListener(object : AnalyticsListener {
+                    override fun onBandwidthEstimate(
+                        eventTime: AnalyticsListener.EventTime,
+                        totalLoadTimeMs: Int,
+                        totalBytesLoaded: Long,
+                        bitrateEstimate: Long
+                    ) {
+                        if (selectedVideoBitrateKbps == null && estimatedBandwidthKbps == null && bitrateEstimate > 0) {
+                            estimatedBandwidthKbps = (bitrateEstimate / 1000).toInt()
+                            renderPlaybackQuality()
+                        }
+                    }
+                })
                 video.player = exo
             }
         }
         val address = channels[index].url
+        selectedVideoResolution = null
         selectedVideoBitrateKbps = null
+        estimatedBandwidthKbps = null
         uiHandler.removeCallbacks(hidePlaybackQuality)
         qualityInfo.visibility = View.GONE
         if (address.startsWith("udp://", true) || address.startsWith("webrtc://", true)) {
@@ -1452,20 +1471,23 @@ class MainActivity : ComponentActivity() {
             .filter { it.width > 0 && it.height > 0 }
             .toList()
         val format = selectedVideoFormats.maxByOrNull { it.width.toLong() * it.height }
+        selectedVideoResolution = format?.let { minOf(it.width, it.height) }
         selectedVideoBitrateKbps = format?.bitrate?.takeIf { it > 0 }?.div(1000)
-        if (format != null && selectedVideoBitrateKbps != null) {
-            showPlaybackQuality(format.width, format.height)
-        } else {
-            uiHandler.removeCallbacks(hidePlaybackQuality)
-            qualityInfo.visibility = View.GONE
-        }
+        estimatedBandwidthKbps = null
+        renderPlaybackQuality()
     }
 
-    private fun showPlaybackQuality(width: Int, height: Int) {
+    private fun renderPlaybackQuality() {
         if (!::qualityInfo.isInitialized || player == null) return
-        val shortSide = minOf(width, height)
-        val bitrate = selectedVideoBitrateKbps ?: return
-        qualityInfo.text = "${shortSide}p (${bitrate} kbps)"
+        val resolution = selectedVideoResolution
+        val bitrate = selectedVideoBitrateKbps
+        val estimatedBitrate = estimatedBandwidthKbps
+        if (resolution == null || (bitrate == null && estimatedBitrate == null)) {
+            uiHandler.removeCallbacks(hidePlaybackQuality)
+            qualityInfo.visibility = View.GONE
+            return
+        }
+        qualityInfo.text = if (bitrate != null) "${resolution}p (${bitrate} kbps)" else "${resolution}p (~${estimatedBitrate} kbps)"
         qualityInfo.visibility = View.VISIBLE
         uiHandler.removeCallbacks(hidePlaybackQuality)
         uiHandler.postDelayed(hidePlaybackQuality, 10_000L)
