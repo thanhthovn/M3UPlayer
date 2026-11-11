@@ -218,7 +218,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildUi() {
-        root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(33, 43, 29)); isFocusableInTouchMode = true }
+        root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(39, 49, 35)); isFocusableInTouchMode = true }
         playScreen = FrameLayout(this)
         video = PlayerView(this).apply {
             useController = true
@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
             setTextColor(Color.WHITE)
             setPadding(dp(7), dp(4), dp(7), dp(4))
             background = GradientDrawable().apply {
-                setColor(Color.argb(190, 34, 45, 30))
+                setColor(Color.argb(190, 40, 51, 36))
                 cornerRadius = dp(5).toFloat()
                 setStroke(dp(1), Color.rgb(88, 112, 62))
             }
@@ -250,7 +250,7 @@ class MainActivity : ComponentActivity() {
         homePanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(16), dp(24), 0)
-            setBackgroundColor(Color.rgb(33, 43, 29))
+            setBackgroundColor(Color.rgb(39, 49, 35))
         }
         root.addView(homePanel, FrameLayout.LayoutParams(-1, -1))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -332,7 +332,7 @@ class MainActivity : ComponentActivity() {
         listPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(5), dp(24), dp(5))
-            background = GradientDrawable().apply { setColor(Color.rgb(34, 45, 30)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(54, 80, 38)) }
+            background = GradientDrawable().apply { setColor(Color.rgb(40, 51, 36)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(54, 80, 38)) }
             elevation = dp(8).toFloat()
         }
         val panelWidth = resources.displayMetrics.widthPixels
@@ -569,7 +569,7 @@ class MainActivity : ComponentActivity() {
         override fun draw(canvas: Canvas) {
             val rect = RectF(bounds).apply { inset(dp(2).toFloat(), dp(2).toFloat()) }
             paint.style = Paint.Style.FILL
-            paint.color = if (highlighted) Color.rgb(70, 88, 48) else Color.rgb(34, 45, 30)
+            paint.color = if (highlighted) Color.rgb(70, 88, 48) else Color.rgb(40, 51, 36)
             canvas.drawRoundRect(rect, dp(8).toFloat(), dp(8).toFloat(), paint)
             paint.style = Paint.Style.STROKE; paint.strokeWidth = dp(if (highlighted) 2 else 1).toFloat()
             paint.color = if (highlighted) focusColor else Color.rgb(58, 76, 43)
@@ -948,7 +948,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applyDialogTheme(dialog: AlertDialog, listTextColor: Int = Color.rgb(255, 232, 150)) {
         dialog.window?.setBackgroundDrawable(GradientDrawable().apply {
-            setColor(Color.rgb(34, 45, 30)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(66, 88, 51))
+            setColor(Color.rgb(40, 51, 36)); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Color.rgb(66, 88, 51))
         })
         dialog.window?.decorView?.let { tintDialogText(it) }
         listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL).forEach { which ->
@@ -961,7 +961,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         dialog.listView?.let { list ->
-            list.setBackgroundColor(Color.rgb(34, 45, 30))
+            list.setBackgroundColor(Color.rgb(40, 51, 36))
             for (i in 0 until list.childCount) {
                 list.getChildAt(i)?.findViewById<TextView>(android.R.id.text1)?.setTextColor(listTextColor)
             }
@@ -1129,7 +1129,7 @@ class MainActivity : ComponentActivity() {
             setHintTextColor(Color.rgb(169, 178, 157))
             this.hint = hint
             background = GradientDrawable().apply {
-                setColor(Color.rgb(14, 20, 13))
+                setColor(Color.rgb(19, 25, 18))
                 cornerRadius = dp(8).toFloat()
                 setStroke(dp(1), Color.rgb(145, 39, 27))
             }
@@ -1147,7 +1147,7 @@ class MainActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(14), dp(18), dp(14))
             background = GradientDrawable().apply {
-                setColor(Color.rgb(23, 32, 21))
+                setColor(Color.rgb(29, 39, 27))
                 cornerRadius = dp(14).toFloat()
                 setStroke(dp(1), Color.rgb(100, 96, 82))
             }
@@ -1646,6 +1646,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showList(show: Boolean) {
+        if (temporaryDirectPlayback) {
+            listVisible = false
+            listPanel.visibility = View.GONE
+            homePanel.visibility = View.GONE
+            return
+        }
         if (player == null) {
             listVisible = false
             homePanel.visibility = View.VISIBLE
