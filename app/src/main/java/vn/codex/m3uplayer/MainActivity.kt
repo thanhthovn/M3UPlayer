@@ -223,10 +223,7 @@ class MainActivity : ComponentActivity() {
             visibility = View.GONE
             contentDescription = "Độ phân giải và bitrate video"
         }
-        playScreen.addView(qualityInfo, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(4)
-            bottomMargin = dp(4)
-        })
+        playScreen.addView(qualityInfo, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         numericChannelOverlay = OutlinedNumberView(this).apply {
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
