@@ -114,6 +114,10 @@ class MainActivity : ComponentActivity() {
     private var channelRenderGeneration = 0
     private var sources = mutableListOf<PlaylistSource>()
     private var channels = listOf<Channel>()
+    private var mainChannelsBeforeTemporary: List<Channel>? = null
+    private var mainChannelIndexBeforeTemporary = -1
+    private var temporaryPlaylistActive = false
+    private var temporaryDirectPlayback = false
     private var provinces = listOf<Province>()
     private var weatherLatitude = 21.0285
     private var weatherLongitude = 105.8542
@@ -134,6 +138,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var timeInfo: TextView
     private lateinit var weatherInfo: TextView
     private lateinit var refreshButton: Button
+    private lateinit var temporaryLinkButton: Button
     private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
@@ -250,7 +255,10 @@ class MainActivity : ComponentActivity() {
         val actionButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         actionButtons.addView(sourceButton, LinearLayout.LayoutParams(dp(64), dp(62)))
         refreshButton = button("⟳", 34).apply {
-            setOnClickListener { if (sources.isEmpty()) showSettingsDialog() else loadPlaylist(manual = true) }
+            setOnClickListener {
+                if (temporaryPlaylistActive || sources.isNotEmpty()) loadPlaylist(manual = true)
+                else showSettingsDialog()
+            }
             background = actionButtonDrawable(false)
             setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
             gravity = Gravity.CENTER
@@ -261,6 +269,13 @@ class MainActivity : ComponentActivity() {
         }
         updateRefreshButtonCount()
         actionButtons.addView(refreshButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
+        temporaryLinkButton = button("▶", 25).apply {
+            contentDescription = "Phát link tạm thời"
+            setOnClickListener { showTemporaryLinkDialog() }
+            background = actionButtonDrawable(false)
+            setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
+        }
+        actionButtons.addView(temporaryLinkButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
         header.addView(actionButtons)
         val spacer = Space(this)
         if (wideHeader) header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
@@ -1054,7 +1069,104 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun loadPlaylist(manual: Boolean = false, sourceOverride: PlaylistSource? = null) {
+    private fun showTemporaryLinkDialog() {
+        fun urlInput(hint: String) = EditText(this).apply {
+            textSize = 16f
+            setSingleLine(true)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(169, 178, 157))
+            this.hint = hint
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(14, 20, 13))
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), Color.rgb(145, 39, 27))
+            }
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val playlistInput = urlInput("https://example.com/playlist.m3u")
+        val streamInput = urlInput("https://example.com/live/stream.m3u8")
+        fun actionButton(label: String, onClick: () -> Unit) = button(label, 15).apply {
+            setTextColor(Color.WHITE)
+            background = actionButtonDrawable(false)
+            setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
+            setOnClickListener { onClick() }
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(23, 32, 21))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(100, 96, 82))
+            }
+        }
+        container.addView(text("📺 NHẬP LINK .M3U HOẶC .M3U8", 19, true).apply {
+            setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 0, 0, dp(12))
+        }, LinearLayout.LayoutParams(-1, -2))
+
+        fun addEntry(label: String, input: EditText, onSubmit: (String) -> Unit) {
+            container.addView(text(label, 14, true).apply {
+                setTextColor(Color.rgb(255, 232, 150)); setPadding(dp(2), dp(7), 0, dp(5))
+            }, LinearLayout.LayoutParams(-1, -2))
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            row.addView(input, LinearLayout.LayoutParams(0, dp(48), 1f))
+            row.addView(actionButton("OK") {
+                val value = input.text.toString().trim()
+                if (!value.startsWith("http://", true) && !value.startsWith("https://", true)) {
+                    input.error = "Nhập URL đầy đủ bắt đầu bằng http:// hoặc https://"
+                } else onSubmit(value)
+            }, LinearLayout.LayoutParams(dp(68), dp(48)).apply { leftMargin = dp(8) })
+            container.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = AlertDialog.Builder(this).setView(container).create()
+        addEntry("📋 LINK LIST .M3U", playlistInput) { value ->
+            dialog.dismiss()
+            val name = value.substringAfterLast('/').substringBefore('?').ifBlank { "Playlist tạm" }
+            loadPlaylist(sourceOverride = PlaylistSource(name, value), temporary = true)
+        }
+        addEntry("▶ LINK .M3U8 STREAMING", streamInput) { value ->
+            dialog.dismiss()
+            playTemporaryStream(value)
+        }
+        container.addView(actionButton("HỦY") { dialog.dismiss() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(14) })
+        dialog.show()
+        applyDialogTheme(dialog)
+        resizeDialog(dialog, 0.9f)
+    }
+
+    private fun playTemporaryStream(url: String) {
+        if (!url.startsWith("http://", true) && !url.startsWith("https://", true)) {
+            toast("Nhập URL đầy đủ bắt đầu bằng http:// hoặc https://")
+            return
+        }
+        if (!temporaryPlaylistActive) {
+            mainChannelsBeforeTemporary = channels
+            mainChannelIndexBeforeTemporary = currentChannel
+        }
+        temporaryPlaylistActive = true
+        temporaryDirectPlayback = true
+        channels = listOf(Channel("Phát tạm", url, ""))
+        currentChannel = 0
+        startupPrompt.visibility = View.GONE
+        renderChannels()
+        playChannel(0)
+    }
+
+    private fun restoreMainPlaylistFromTemporary() {
+        if (!temporaryPlaylistActive) return
+        channels = mainChannelsBeforeTemporary ?: channels
+        currentChannel = mainChannelIndexBeforeTemporary
+        mainChannelsBeforeTemporary = null
+        mainChannelIndexBeforeTemporary = -1
+        temporaryPlaylistActive = false
+        temporaryDirectPlayback = false
+        startupPrompt.visibility = if (sources.isEmpty()) View.VISIBLE else View.GONE
+        renderChannels()
+    }
+
+    private fun loadPlaylist(manual: Boolean = false, sourceOverride: PlaylistSource? = null, temporary: Boolean = false) {
+        if (!temporary && temporaryPlaylistActive) restoreMainPlaylistFromTemporary()
         val loadId = ++playlistLoadId
         synchronized(playlistRequestLock) {
             activePlaylistConnection?.disconnect()
@@ -1083,9 +1195,19 @@ class MainActivity : ComponentActivity() {
                     val cachedJson = serializeChannels(directChannels)
                     runOnUiThread { if (loadId == playlistLoadId) {
                         refreshButton.isEnabled = true; refreshButton.alpha = 1f
-                        if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
+                        if (sourceOverride != null && !temporary) { sources.clear(); sources.add(source); saveSources() }
                         startupPrompt.visibility = View.GONE
-                        channels = directChannels; saveCachedChannels(cachedJson, source.value); renderChannels()
+                        if (temporary) {
+                            if (!temporaryPlaylistActive) {
+                                mainChannelsBeforeTemporary = channels
+                                mainChannelIndexBeforeTemporary = currentChannel
+                            }
+                            temporaryPlaylistActive = true
+                            temporaryDirectPlayback = false
+                            channels = directChannels
+                        } else channels = directChannels
+                        if (!temporary) saveCachedChannels(cachedJson, source.value)
+                        renderChannels()
                         applyStartupActionIfReady()
                         if (manual) toast("Đã cập nhật playlist.")
                     } }
@@ -1132,9 +1254,19 @@ class MainActivity : ComponentActivity() {
                 val cachedJson = serializeChannels(parsed)
                 runOnUiThread { if (loadId == playlistLoadId) {
                     refreshButton.isEnabled = true; refreshButton.alpha = 1f
-                    if (sourceOverride != null) { sources.clear(); sources.add(source); saveSources() }
+                    if (sourceOverride != null && !temporary) { sources.clear(); sources.add(source); saveSources() }
                     startupPrompt.visibility = View.GONE
-                    channels = parsed; saveCachedChannels(cachedJson, source.value); renderChannels()
+                    if (temporary) {
+                        if (!temporaryPlaylistActive) {
+                            mainChannelsBeforeTemporary = channels
+                            mainChannelIndexBeforeTemporary = currentChannel
+                        }
+                        temporaryPlaylistActive = true
+                        temporaryDirectPlayback = false
+                        channels = parsed
+                    } else channels = parsed
+                    if (!temporary) saveCachedChannels(cachedJson, source.value)
+                    renderChannels()
                     applyStartupActionIfReady()
                     if (manual) toast("Đã cập nhật ${parsed.size} kênh.")
                 } }
@@ -1545,6 +1677,7 @@ class MainActivity : ComponentActivity() {
         video.player = null
         player?.apply { playWhenReady = false; stop(); clearMediaItems(); release() }
         player = null
+        if (temporaryDirectPlayback) restoreMainPlaylistFromTemporary()
         listVisible = false
         listPanel.visibility = View.GONE
         homePanel.visibility = View.VISIBLE
