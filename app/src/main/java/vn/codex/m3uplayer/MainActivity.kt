@@ -269,12 +269,13 @@ class MainActivity : ComponentActivity() {
             setOnClickListener { showChannelGroupDialog() }
             background = actionButtonDrawable(false)
             setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
+            visibility = View.GONE
         }
         actionButtons.addView(channelGroupButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
         refreshButton = button("⟳", 34).apply {
             setOnClickListener {
                 if (temporaryPlaylistActive || sources.isNotEmpty()) loadPlaylist(manual = true)
-                else showSettingsDialog()
+                else showUrlDialog()
             }
             setOnLongClickListener { showTemporaryLinkDialog(); true }
             background = actionButtonDrawable(false)
@@ -1368,6 +1369,10 @@ class MainActivity : ComponentActivity() {
     private fun renderChannels() {
         val generation = ++channelRenderGeneration
         if (selectedChannelGroup != null && channels.none { it.group.trim() == selectedChannelGroup }) selectedChannelGroup = null
+        if (::channelGroupButton.isInitialized) {
+            val hasPlaylist = sources.isNotEmpty() && channels.isNotEmpty() && !temporaryDirectPlayback
+            channelGroupButton.visibility = if (hasPlaylist) View.VISIBLE else View.GONE
+        }
         updateRefreshButtonCount()
         channelRows.removeAllViews()
         channelGrid.removeAllViews()
