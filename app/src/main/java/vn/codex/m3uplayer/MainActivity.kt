@@ -138,7 +138,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var timeInfo: TextView
     private lateinit var weatherInfo: TextView
     private lateinit var refreshButton: Button
-    private lateinit var temporaryLinkButton: Button
     private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
@@ -167,6 +166,14 @@ class MainActivity : ComponentActivity() {
             .build()
     }
     private val uiHandler = Handler(Looper.getMainLooper())
+    private var refreshButtonCenterHeld = false
+    private var refreshButtonLongPressTriggered = false
+    private val refreshButtonLongPress = Runnable {
+        if (refreshButtonCenterHeld && currentFocus === refreshButton && !refreshButtonLongPressTriggered) {
+            refreshButtonLongPressTriggered = true
+            showTemporaryLinkDialog()
+        }
+    }
     private val clockTick = object : Runnable {
         override fun run() {
             updateClock()
@@ -259,6 +266,7 @@ class MainActivity : ComponentActivity() {
                 if (temporaryPlaylistActive || sources.isNotEmpty()) loadPlaylist(manual = true)
                 else showSettingsDialog()
             }
+            setOnLongClickListener { showTemporaryLinkDialog(); true }
             background = actionButtonDrawable(false)
             setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
             gravity = Gravity.CENTER
@@ -269,13 +277,6 @@ class MainActivity : ComponentActivity() {
         }
         updateRefreshButtonCount()
         actionButtons.addView(refreshButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
-        temporaryLinkButton = button("▶", 25).apply {
-            contentDescription = "Phát link tạm thời"
-            setOnClickListener { showTemporaryLinkDialog() }
-            background = actionButtonDrawable(false)
-            setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
-        }
-        actionButtons.addView(temporaryLinkButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
         header.addView(actionButtons)
         val spacer = Space(this)
         if (wideHeader) header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
@@ -1334,7 +1335,7 @@ class MainActivity : ComponentActivity() {
         label.setSpan(android.text.style.AbsoluteSizeSpan(26, true), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         label.setSpan(android.text.style.StyleSpan(Typeface.BOLD), countText.length, label.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         refreshButton.text = label
-        refreshButton.contentDescription = "Cập nhật playlist, ${channels.size} kênh"
+        refreshButton.contentDescription = "Cập nhật playlist, ${channels.size} kênh. Nhấn giữ để nhập link tạm."
     }
 
     private fun renderChannelBatch(generation: Int, start: Int) {
@@ -1703,8 +1704,24 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                val focused = currentFocus
+                if (event.action == KeyEvent.ACTION_DOWN && focused === refreshButton) {
+                    if (event.repeatCount == 0) {
+                        refreshButtonCenterHeld = true
+                        refreshButtonLongPressTriggered = false
+                        uiHandler.removeCallbacks(refreshButtonLongPress)
+                        uiHandler.postDelayed(refreshButtonLongPress, 600L)
+                    }
+                    return true
+                }
                 if (event.action == KeyEvent.ACTION_UP) {
-                    val focused = currentFocus
+                    if (refreshButtonCenterHeld || refreshButtonLongPressTriggered) {
+                        refreshButtonCenterHeld = false
+                        uiHandler.removeCallbacks(refreshButtonLongPress)
+                        val longPressed = refreshButtonLongPressTriggered
+                        refreshButtonLongPressTriggered = false
+                        if (longPressed) return true
+                    }
                     if (player == null) {
                         if (focused == null || focused === root || !focused.performClick()) if (channels.isEmpty()) showSettingsDialog()
                     } else if (!listVisible) showList(true)
@@ -1721,6 +1738,7 @@ class MainActivity : ComponentActivity() {
         uiHandler.removeCallbacks(weatherTick)
         uiHandler.removeCallbacks(numericTuneTimeout)
         uiHandler.removeCallbacks(hidePlaybackQuality)
+        uiHandler.removeCallbacks(refreshButtonLongPress)
         synchronized(playlistRequestLock) {
             activePlaylistConnection?.disconnect()
             activePlaylistConnection = null
