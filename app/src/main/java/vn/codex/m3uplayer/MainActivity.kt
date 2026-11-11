@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
+    private var selectedVideoBitrateKbps: Int? = null
     private var startupModeAtLaunch = 0
     private var startupChannelAtLaunch = 1
     private var startupActionPending = false
@@ -214,7 +215,7 @@ class MainActivity : ComponentActivity() {
                 setStroke(dp(1), Color.rgb(88, 112, 62))
             }
             visibility = View.GONE
-            contentDescription = "Chất lượng video"
+            contentDescription = "Độ phân giải và bitrate video"
         }
         playScreen.addView(qualityInfo, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
             leftMargin = dp(24)
@@ -1374,8 +1375,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         val address = channels[index].url
-        qualityInfo.text = "Chất lượng: Đang tải"
-        qualityInfo.visibility = View.VISIBLE
+        selectedVideoBitrateKbps = null
+        qualityInfo.visibility = View.GONE
         if (address.startsWith("udp://", true) || address.startsWith("webrtc://", true)) {
             toast(if (address.startsWith("udp://", true)) "Chưa hỗ trợ UDP trực tiếp. Hãy dùng HLS, DASH hoặc RTSP." else "WebRTC cần thông tin signaling riêng, không thể phát chỉ bằng URL trong M3U.")
             return
@@ -1447,13 +1448,15 @@ class MainActivity : ComponentActivity() {
             .filter { it.width > 0 && it.height > 0 }
             .toList()
         val format = selectedVideoFormats.maxByOrNull { it.width.toLong() * it.height }
+        selectedVideoBitrateKbps = format?.bitrate?.takeIf { it > 0 }?.div(1000)
         if (format != null) showPlaybackQuality(format.width, format.height)
     }
 
     private fun showPlaybackQuality(width: Int, height: Int) {
         if (!::qualityInfo.isInitialized || player == null) return
         val shortSide = minOf(width, height)
-        qualityInfo.text = "Chất lượng: ${shortSide}p"
+        val bitrate = selectedVideoBitrateKbps ?: return
+        qualityInfo.text = "${shortSide}p (${bitrate} kbps)"
         qualityInfo.visibility = View.VISIBLE
     }
 
