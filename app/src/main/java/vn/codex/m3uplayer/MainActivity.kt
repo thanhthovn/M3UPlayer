@@ -212,20 +212,20 @@ class MainActivity : ComponentActivity() {
             setOnClickListener { toggleList() }
         }
         playScreen.addView(video, FrameLayout.LayoutParams(-1, -1))
-        qualityInfo = text("", 16, true).apply {
+        qualityInfo = text("", 8, true).apply {
             setTextColor(Color.WHITE)
-            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setPadding(dp(7), dp(4), dp(7), dp(4))
             background = GradientDrawable().apply {
                 setColor(Color.argb(190, 34, 45, 30))
-                cornerRadius = dp(10).toFloat()
+                cornerRadius = dp(5).toFloat()
                 setStroke(dp(1), Color.rgb(88, 112, 62))
             }
             visibility = View.GONE
             contentDescription = "Độ phân giải và bitrate video"
         }
         playScreen.addView(qualityInfo, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(24)
-            bottomMargin = dp(24)
+            leftMargin = dp(4)
+            bottomMargin = dp(4)
         })
         numericChannelOverlay = OutlinedNumberView(this).apply {
             visibility = View.GONE
