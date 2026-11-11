@@ -516,6 +516,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         dialog.show()
+        resizeDialog(dialog, 0.5f)
     }
 
     private fun locationSpinnerAdapter(items: List<String>) = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
