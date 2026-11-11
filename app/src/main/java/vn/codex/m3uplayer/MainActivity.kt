@@ -168,6 +168,9 @@ class MainActivity : ComponentActivity() {
     }
     private val pendingChannelNumber = StringBuilder()
     private val numericTuneTimeout = Runnable { tunePendingChannelNumber() }
+    private val hidePlaybackQuality = Runnable {
+        if (::qualityInfo.isInitialized) qualityInfo.visibility = View.GONE
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -1376,6 +1379,7 @@ class MainActivity : ComponentActivity() {
         }
         val address = channels[index].url
         selectedVideoBitrateKbps = null
+        uiHandler.removeCallbacks(hidePlaybackQuality)
         qualityInfo.visibility = View.GONE
         if (address.startsWith("udp://", true) || address.startsWith("webrtc://", true)) {
             toast(if (address.startsWith("udp://", true)) "Chưa hỗ trợ UDP trực tiếp. Hãy dùng HLS, DASH hoặc RTSP." else "WebRTC cần thông tin signaling riêng, không thể phát chỉ bằng URL trong M3U.")
@@ -1449,7 +1453,12 @@ class MainActivity : ComponentActivity() {
             .toList()
         val format = selectedVideoFormats.maxByOrNull { it.width.toLong() * it.height }
         selectedVideoBitrateKbps = format?.bitrate?.takeIf { it > 0 }?.div(1000)
-        if (format != null) showPlaybackQuality(format.width, format.height)
+        if (format != null && selectedVideoBitrateKbps != null) {
+            showPlaybackQuality(format.width, format.height)
+        } else {
+            uiHandler.removeCallbacks(hidePlaybackQuality)
+            qualityInfo.visibility = View.GONE
+        }
     }
 
     private fun showPlaybackQuality(width: Int, height: Int) {
@@ -1458,6 +1467,8 @@ class MainActivity : ComponentActivity() {
         val bitrate = selectedVideoBitrateKbps ?: return
         qualityInfo.text = "${shortSide}p (${bitrate} kbps)"
         qualityInfo.visibility = View.VISIBLE
+        uiHandler.removeCallbacks(hidePlaybackQuality)
+        uiHandler.postDelayed(hidePlaybackQuality, 10_000L)
     }
 
     private fun toggleList() = showList(!listVisible)
@@ -1510,6 +1521,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun returnToHome() {
+        uiHandler.removeCallbacks(hidePlaybackQuality)
         if (::qualityInfo.isInitialized) qualityInfo.visibility = View.GONE
         video.player = null
         player?.apply { playWhenReady = false; stop(); clearMediaItems(); release() }
@@ -1556,6 +1568,7 @@ class MainActivity : ComponentActivity() {
         uiHandler.removeCallbacks(clockTick)
         uiHandler.removeCallbacks(weatherTick)
         uiHandler.removeCallbacks(numericTuneTimeout)
+        uiHandler.removeCallbacks(hidePlaybackQuality)
         synchronized(playlistRequestLock) {
             activePlaylistConnection?.disconnect()
             activePlaylistConnection = null
