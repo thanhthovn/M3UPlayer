@@ -92,7 +92,7 @@ private class OutlinedNumberView(context: android.content.Context) : View(contex
     }
 }
 data class PlaylistSource(val name: String, val value: String)
-data class Channel(val name: String, val url: String, val logo: String)
+data class Channel(val name: String, val url: String, val logo: String, val group: String = "")
 data class Place(val name: String, val latitude: Double, val longitude: Double)
 data class Province(val name: String, val latitude: Double, val longitude: Double, val communes: List<Place>)
 
@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
     private var channels = listOf<Channel>()
     private var mainChannelsBeforeTemporary: List<Channel>? = null
     private var mainChannelIndexBeforeTemporary = -1
+    private var mainChannelGroupBeforeTemporary: String? = null
     private var temporaryPlaylistActive = false
     private var temporaryDirectPlayback = false
     private var provinces = listOf<Province>()
@@ -138,9 +139,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var timeInfo: TextView
     private lateinit var weatherInfo: TextView
     private lateinit var refreshButton: Button
+    private lateinit var channelGroupButton: Button
     private lateinit var startupPrompt: TextView
     private var wideWeatherLayout = false
     private var currentChannel = -1
+    private var selectedChannelGroup: String? = null
     private var selectedVideoResolution: Int? = null
     private var selectedVideoBitrateKbps: Int? = null
     private var estimatedBandwidthKbps: Int? = null
@@ -261,6 +264,13 @@ class MainActivity : ComponentActivity() {
         }
         val actionButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         actionButtons.addView(sourceButton, LinearLayout.LayoutParams(dp(64), dp(62)))
+        channelGroupButton = button("☰", 27).apply {
+            contentDescription = "Chọn nhóm kênh"
+            setOnClickListener { showChannelGroupDialog() }
+            background = actionButtonDrawable(false)
+            setOnFocusChangeListener { view, focused -> view.background = actionButtonDrawable(focused) }
+        }
+        actionButtons.addView(channelGroupButton, LinearLayout.LayoutParams(dp(64), dp(62)).apply { leftMargin = dp(8) })
         refreshButton = button("⟳", 34).apply {
             setOnClickListener {
                 if (temporaryPlaylistActive || sources.isNotEmpty()) loadPlaylist(manual = true)
@@ -769,6 +779,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showChannelGroupDialog() {
+        val groups = channels.map { it.group.trim() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val choices = buildList {
+            add("Tất cả các kênh")
+            addAll(groups.filter { it.isNotEmpty() })
+            if (groups.any { it.isEmpty() }) add("Chưa phân nhóm")
+        }
+        val selectedIndex = when {
+            selectedChannelGroup == null -> 0
+            selectedChannelGroup!!.isEmpty() -> choices.indexOf("Chưa phân nhóm").coerceAtLeast(0)
+            else -> choices.indexOf(selectedChannelGroup).coerceAtLeast(0)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("NHÓM KÊNH")
+            .setAdapter(themedChoiceAdapter(choices.toTypedArray(), singleChoice = true, textColor = Color.WHITE)) { dialogInterface, which ->
+                selectedChannelGroup = when {
+                    which == 0 -> null
+                    choices[which] == "Chưa phân nhóm" -> ""
+                    else -> choices[which]
+                }
+                dialogInterface.dismiss()
+                renderChannels()
+            }
+            .setNegativeButton("ĐÓNG", null)
+            .create()
+        dialog.show()
+        dialog.listView.choiceMode = ListView.CHOICE_MODE_SINGLE
+        dialog.listView.setItemChecked(selectedIndex, true)
+        applyDialogTheme(dialog, listTextColor = Color.WHITE)
+        resizeDialog(dialog, 0.6f)
+    }
+
     private fun showStartupBehaviorDialog() {
         val options = arrayOf("Tự phát kênh số…", "Tự focus đến kênh số…", "Không làm gì cả")
         val checked = when (prefs.getInt("startup_action", 0)) { 1 -> 0; 2 -> 1; else -> 2 }
@@ -884,7 +926,12 @@ class MainActivity : ComponentActivity() {
 
     private fun focusHomeChannel(index: Int, attempts: Int = 0) {
         if (player != null || isFinishing) return
-        val target = channelGrid.getChildAt(index)
+        val position = visiblePosition(index)
+        if (position < 0 && index in channels.indices) {
+            selectedChannelGroup = channels[index].group.trim().takeIf { it.isNotEmpty() }
+            renderChannels()
+        }
+        val target = channelGrid.getChildAt(visiblePosition(index).takeIf { it >= 0 } ?: 0)
         if (target != null) {
             target.post {
                 val scrollView = channelGrid.parent as? ScrollView
@@ -1027,14 +1074,16 @@ class MainActivity : ComponentActivity() {
             val array = JSONArray(prefs.getString("playlist_cache", "[]"))
             (0 until array.length()).map { i ->
                 val item = array.getJSONObject(i)
-                Channel(item.getString("name"), item.getString("url"), item.optString("logo", ""))
+                Channel(item.getString("name"), item.getString("url"), item.optString("logo", ""), item.optString("group", ""))
             }
         } catch (_: Exception) { emptyList() }
     }
 
     private fun serializeChannels(parsed: List<Channel>): String {
         val array = JSONArray()
-        parsed.forEach { channel -> array.put(JSONObject().put("name", channel.name).put("url", channel.url).put("logo", channel.logo)) }
+        parsed.forEach { channel ->
+            array.put(JSONObject().put("name", channel.name).put("url", channel.url).put("logo", channel.logo).put("group", channel.group))
+        }
         return array.toString()
     }
 
@@ -1144,9 +1193,11 @@ class MainActivity : ComponentActivity() {
         if (!temporaryPlaylistActive) {
             mainChannelsBeforeTemporary = channels
             mainChannelIndexBeforeTemporary = currentChannel
+            mainChannelGroupBeforeTemporary = selectedChannelGroup
         }
         temporaryPlaylistActive = true
         temporaryDirectPlayback = true
+        selectedChannelGroup = null
         channels = listOf(Channel("Phát tạm", url, ""))
         currentChannel = 0
         startupPrompt.visibility = View.GONE
@@ -1158,8 +1209,10 @@ class MainActivity : ComponentActivity() {
         if (!temporaryPlaylistActive) return
         channels = mainChannelsBeforeTemporary ?: channels
         currentChannel = mainChannelIndexBeforeTemporary
+        selectedChannelGroup = mainChannelGroupBeforeTemporary
         mainChannelsBeforeTemporary = null
         mainChannelIndexBeforeTemporary = -1
+        mainChannelGroupBeforeTemporary = null
         temporaryPlaylistActive = false
         temporaryDirectPlayback = false
         startupPrompt.visibility = if (sources.isEmpty()) View.VISIBLE else View.GONE
@@ -1202,9 +1255,11 @@ class MainActivity : ComponentActivity() {
                             if (!temporaryPlaylistActive) {
                                 mainChannelsBeforeTemporary = channels
                                 mainChannelIndexBeforeTemporary = currentChannel
+                                mainChannelGroupBeforeTemporary = selectedChannelGroup
                             }
                             temporaryPlaylistActive = true
                             temporaryDirectPlayback = false
+                            selectedChannelGroup = null
                             channels = directChannels
                         } else channels = directChannels
                         if (!temporary) saveCachedChannels(cachedJson, source.value)
@@ -1261,9 +1316,11 @@ class MainActivity : ComponentActivity() {
                         if (!temporaryPlaylistActive) {
                             mainChannelsBeforeTemporary = channels
                             mainChannelIndexBeforeTemporary = currentChannel
+                            mainChannelGroupBeforeTemporary = selectedChannelGroup
                         }
                         temporaryPlaylistActive = true
                         temporaryDirectPlayback = false
+                        selectedChannelGroup = null
                         channels = parsed
                     } else channels = parsed
                     if (!temporary) saveCachedChannels(cachedJson, source.value)
@@ -1291,17 +1348,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun parseM3u(raw: String, base: String): List<Channel> {
-        val out = mutableListOf<Channel>(); var name = "Kênh"; var logo = ""
+        val out = mutableListOf<Channel>(); var name = "Kênh"; var logo = ""; var group = ""
         raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
             if (line.startsWith("#EXTINF", true)) {
                 name = line.substringAfterLast(',', "Kênh").trim().ifBlank { "Kênh" }
                 logo = Regex("(?:tvg-logo|logo)=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1).orEmpty()
+                group = Regex("group-title=[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE).find(line)?.groupValues?.get(1)?.trim().orEmpty()
             } else if (!line.startsWith("#")) {
                 val target = try {
                     if (listOf("http://", "https://", "content://", "file://", "rtsp://", "rtmp://", "udp://", "webrtc://").any { line.startsWith(it, true) }) line
                     else URL(URL(base), line).toString()
                 } catch (_: Exception) { line }
-                out.add(Channel(name, target, logo)); name = "Kênh"; logo = ""
+                out.add(Channel(name, target, logo, group)); name = "Kênh"; logo = ""; group = ""
             }
         }
         return out
@@ -1309,6 +1367,7 @@ class MainActivity : ComponentActivity() {
 
     private fun renderChannels() {
         val generation = ++channelRenderGeneration
+        if (selectedChannelGroup != null && channels.none { it.group.trim() == selectedChannelGroup }) selectedChannelGroup = null
         updateRefreshButtonCount()
         channelRows.removeAllViews()
         channelGrid.removeAllViews()
@@ -1340,8 +1399,10 @@ class MainActivity : ComponentActivity() {
 
     private fun renderChannelBatch(generation: Int, start: Int) {
         if (generation != channelRenderGeneration || isFinishing) return
-        val end = (start + 24).coerceAtMost(channels.size)
-        for (index in start until end) {
+        val visibleIndices = channels.indices.filter { selectedChannelGroup == null || channels[it].group.trim() == selectedChannelGroup }
+        val end = (start + 24).coerceAtMost(visibleIndices.size)
+        for (position in start until end) {
+            val index = visibleIndices[position]
             val channel = channels[index]
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -1395,11 +1456,17 @@ class MainActivity : ComponentActivity() {
             row.addView(label, LinearLayout.LayoutParams(0, dp(64), 1f))
             row.addView(text("▶", 23, true).apply { setTextColor(Color.rgb(205, 214, 147)) }, LinearLayout.LayoutParams(dp(42), -2))
             channelRows.addView(row, LinearLayout.LayoutParams(-1, dp(72)).apply { bottomMargin = dp(6) })
-            if (listVisible && player != null && index == currentChannel) row.requestFocus()
+            if (listVisible && player != null && (index == currentChannel || (position == 0 && visiblePosition(currentChannel) < 0))) row.requestFocus()
         }
-        if (start == 0 && player == null) channelGrid.getChildAt(0)?.requestFocus()
-        if (end < channels.size) uiHandler.postDelayed({ renderChannelBatch(generation, end) }, 12)
+        if (start == 0 && player == null) channelGrid.getChildAt(visiblePosition(currentChannel).takeIf { it >= 0 } ?: 0)?.requestFocus()
+        if (end < visibleIndices.size) uiHandler.postDelayed({ renderChannelBatch(generation, end) }, 12)
     }
+
+    private fun visibleChannelIndices(): List<Int> = channels.indices.filter {
+        selectedChannelGroup == null || channels[it].group.trim() == selectedChannelGroup
+    }
+
+    private fun visiblePosition(channelIndex: Int): Int = visibleChannelIndices().indexOf(channelIndex)
 
     private fun loadLogo(address: String, image: ImageView) {
         image.tag = address
@@ -1566,7 +1633,10 @@ class MainActivity : ComponentActivity() {
         }
         player!!.prepare(); player!!.playWhenReady = true
         if (hideList) showList(false)
-        if (!hideList && listVisible) channelRows.getChildAt(index).requestFocus()
+        if (!hideList && listVisible) {
+            val rowPosition = visiblePosition(index)
+            if (rowPosition >= 0) channelRows.getChildAt(rowPosition)?.requestFocus()
+        }
         video.contentDescription = "Đang phát ${channels[index].name}. Nhấn Trở về để về màn hình chính."
     }
 
@@ -1584,7 +1654,8 @@ class MainActivity : ComponentActivity() {
         if (show) {
             val width = if (player == null) resources.displayMetrics.widthPixels else (resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(420))
             (listPanel.layoutParams as FrameLayout.LayoutParams).also { it.width = width; listPanel.layoutParams = it }
-            if (channels.isNotEmpty()) channelRows.getChildAt(currentChannel.coerceIn(0, channels.lastIndex))?.requestFocus()
+            val rowPosition = visiblePosition(currentChannel)
+            if (rowPosition >= 0) channelRows.getChildAt(rowPosition)?.requestFocus()
         }
         if (show && channels.isEmpty()) showSettingsDialog()
     }
@@ -1626,8 +1697,11 @@ class MainActivity : ComponentActivity() {
     private fun toggleList() = showList(!listVisible)
 
     private fun changeChannel(delta: Int) {
-        if (channels.isEmpty()) return
-        val next = if (currentChannel < 0) 0 else (currentChannel + delta + channels.size) % channels.size
+        val visible = visibleChannelIndices()
+        if (visible.isEmpty()) return
+        val currentPosition = visible.indexOf(currentChannel)
+        val nextPosition = if (currentPosition < 0) 0 else (currentPosition + delta + visible.size) % visible.size
+        val next = visible[nextPosition]
         playChannel(next, hideList = !listVisible)
     }
 
@@ -1684,7 +1758,8 @@ class MainActivity : ComponentActivity() {
         homePanel.visibility = View.VISIBLE
         channelRows.childrenAt().forEach { it.background = channelItemDrawable(false, 12) }
         channelGrid.childrenAt().forEach { it.background = channelItemDrawable(false, 16) }
-        if (channelGrid.childCount > 0) channelGrid.getChildAt(currentChannel.coerceIn(0, channelGrid.childCount - 1)).requestFocus()
+        val gridPosition = visiblePosition(currentChannel)
+        if (gridPosition >= 0) channelGrid.getChildAt(gridPosition)?.requestFocus()
         else (homePanel.getChildAt(0) as? LinearLayout)?.getChildAt(0)?.requestFocus()
     }
 
